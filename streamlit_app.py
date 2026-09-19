@@ -383,11 +383,20 @@ with tab3:
                 st.error(f"모델 파일을 찾을 수 없습니다: {cfg['model_file']}")
             else:
                 with st.spinner("RL 모델 및 물리 시뮬레이션 환경 로드 중..."):
-                    import mujoco_compat
-                    import microduck_env
                     import gymnasium as gym
                     from stable_baselines3 import PPO
                     from stable_baselines3.common.vec_env import DummyVecEnv, VecNormalize
+                    if cfg["name"] == "MicroDuck-v1":
+                        try:
+                            import mujoco_compat
+                            import microduck_env
+                        except Exception:
+                            pass
+                    elif "v5" in cfg["name"]:
+                        try:
+                            import mujoco_compat
+                        except Exception:
+                            pass
 
                 progress_bar = st.progress(0)
                 status_text = st.empty()
@@ -526,12 +535,22 @@ with tab4:
         else:
             try:
                 import io
-                import mujoco_compat
-                import microduck_env
                 import gymnasium as gym
                 from stable_baselines3 import PPO
                 from stable_baselines3.common.monitor import Monitor
                 from stable_baselines3.common.callbacks import BaseCallback
+
+                if selected_train_env == "MicroDuck-v1":
+                    try:
+                        import mujoco_compat
+                        import microduck_env
+                    except Exception as env_e:
+                        st.warning(f"MicroDuck 환경 로드 경고: {env_e}")
+                elif "v5" in selected_train_env:
+                    try:
+                        import mujoco_compat
+                    except Exception:
+                        pass
 
                 status_box.info(f"⏳ `{selected_train_env}` 물리 시뮬레이션 환경 초기화 중...")
 
