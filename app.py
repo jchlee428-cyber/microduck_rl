@@ -4,7 +4,11 @@ MicroDuck RL Lab - Interactive Web Dashboard (Streamlit)
 Interactive web control center for observing, evaluating, and managing
 all trained reinforcement learning robots (MicroDuck, MuJoCo suite, CartPole).
 """
-import _bootstrap  # Auto-route to .venv python
+try:
+    import _bootstrap
+except Exception:
+    pass
+
 import os
 import sys
 import time
@@ -13,8 +17,6 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import streamlit.components.v1 as components
-# Note: Heavy ML libraries (torch, stable_baselines3, mujoco) are lazy-loaded
-# inside Tab 3 on-demand so the dashboard UI loads in sub-seconds without blocking.
 
 # ==========================================
 # 1. Page Configuration & Custom CSS
@@ -70,6 +72,13 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+def safe_image(path, caption=None):
+    """Helper to render image with fallback for Streamlit version compatibility."""
+    try:
+        st.image(path, caption=caption, width="stretch")
+    except Exception:
+        st.image(path, caption=caption, use_container_width=True)
 
 # ==========================================
 # 2. Robot Specification Metadata
@@ -223,10 +232,10 @@ if cfg["vec_norm"]:
 
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 🖥️ Native 3D Simulation")
-if st.sidebar.button("▶ Open Native 3D Viewer Window", use_container_width=True):
+if st.sidebar.button("▶ Open Native 3D Viewer Window"):
     cmd = [sys.executable, "visualize_agent.py", "--env", cfg["name"], "--human", "--loop"]
     subprocess.Popen(cmd)
-    st.sidebar.success(f"MuJoCo 3D 창 실행 완료: {cfg['name']}")
+    st.sidebar.success(f"MuJoCo 3D 창 실행 명령 전송: {cfg['name']}")
 
 # ==========================================
 # 5. Main Dashboard Tabs
@@ -250,7 +259,7 @@ with tab1:
     with col_vid:
         gif_path = cfg["gif_file"]
         if os.path.exists(gif_path):
-            st.image(gif_path, caption=f"[좌] 훈련 전 Random Baseline vs [우] 훈련 후 PPO Agent ({cfg['name']})", use_container_width=True)
+            safe_image(gif_path, caption=f"[좌] 훈련 전 Random Baseline vs [우] 훈련 후 PPO Agent ({cfg['name']})")
         else:
             st.warning(f"애니메이션 파일이 아직 없습니다: {gif_path}")
             if st.button(f"🎥 {cfg['name']} 비교 애니메이션 지금 렌더링하기"):
@@ -326,10 +335,9 @@ with tab2:
             pass
 
     st.markdown("#### 🖼️ 8-패널 종합 학습 곡선 대시보드")
-    # 8-panel Suite Chart
     chart_path = "logs/learning_curves.png"
     if os.path.exists(chart_path):
-        st.image(chart_path, caption="MicroDuck RL Lab - Complete 8-Panel Reinforcement Learning Curves", use_container_width=True)
+        safe_image(chart_path, caption="MicroDuck RL Lab - Complete 8-Panel Reinforcement Learning Curves")
     else:
         st.warning("학습 곡선 차트가 없습니다. 생성 중...")
         subprocess.run([sys.executable, "plot_results.py"])
@@ -346,9 +354,8 @@ with tab2:
         {"Robot": "Humanoid-v5", "Type": "Full-Body 17J", "Random Mean": 122.90, "PPO Mean": 363.00, "Improvement": "+195.3%", "Status": "✔ Full-Body Balance"}
     ]
     df_bench = pd.DataFrame(benchmark_data)
-    st.dataframe(df_bench, use_container_width=True, hide_index=True)
+    st.dataframe(df_bench, hide_index=True)
 
-    # Bar chart for PPO rewards
     st.markdown("#### 📈 PPO 평가 보상 비교 차트")
     chart_df = pd.DataFrame({
         "Robot": [b["Robot"] for b in benchmark_data],
@@ -367,7 +374,7 @@ with tab3:
     with eval_col1:
         num_test_episodes = st.slider("평가 에피소드 수:", min_value=1, max_value=10, value=3)
         deterministic = st.checkbox("Deterministic Policy", value=True)
-        start_eval = st.button("🚀 실시간 인퍼런스 롤아웃 시작", type="primary", use_container_width=True)
+        start_eval = st.button("🚀 실시간 인퍼런스 롤아웃 시작", type="primary")
 
     with eval_col2:
         if start_eval:
@@ -456,12 +463,8 @@ with tab4:
         TensorBoard를 통해 신경망 손실 함수(`train/loss`), 정책 그래디언트(`policy_gradient_loss`),
         에피소드 평균 보상(`rollout/ep_rew_mean`), 초당 시뮬레이션 FPS 등을 실시간으로 확인할 수 있습니다.
         """)
-        st.link_button("🌐 Open TensorBoard (http://127.0.0.1:6006)", "http://127.0.0.1:6006", use_container_width=True)
-        st.caption("팁: localhost가 흰 화면으로 뜰 경우 127.0.0.1:6006으로 접속하시면 바로 표시됩니다.")
-
-        if st.button("🔄 Restart TensorBoard Server"):
-            subprocess.Popen([sys.executable, "launch_tensorboard.py"])
-            st.success("TensorBoard 서버 구동 명령이 전송되었습니다.")
+        st.link_button("🌐 Open TensorBoard (http://127.0.0.1:6006)", "http://127.0.0.1:6006")
+        st.caption("팁: 로컬 실행 환경에서는 127.0.0.1:6006으로 접속하시면 바로 표시됩니다.")
 
     with col_tb2:
         st.markdown("#### ⚙️ 시스템 및 런타임 정보")
@@ -469,7 +472,7 @@ with tab4:
 Python Executable : {sys.executable}
 Working Directory : {os.getcwd()}
 Active Robots     : {len(ROBOT_CONFIGS)} environments
-OS Platform       : Windows (Unicode Path Patched)
+OS Platform       : Cloud / Linux Deployment Ready
 Web Server        : Streamlit 1.64 + MuJoCo 3.13
         """, language="text")
 
