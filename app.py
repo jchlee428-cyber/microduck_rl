@@ -1,6 +1,6 @@
 """
-MicroDuck RL Lab - Interactive Web Dashboard (Streamlit)
-========================================================
+MicroDuck RL Lab - Interactive Web Dashboard (Streamlit Cloud Entrypoint)
+========================================================================
 Interactive web control center for observing, evaluating, and managing
 all trained reinforcement learning robots (MicroDuck, MuJoCo suite, CartPole).
 """
@@ -240,10 +240,11 @@ if st.sidebar.button("▶ Open Native 3D Viewer Window"):
 # ==========================================
 # 5. Main Dashboard Tabs
 # ==========================================
-tab1, tab2, tab3, tab4 = st.tabs([
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🎬 Visual Showcase (애니메이션)",
     "📊 Performance Analytics (학습 곡선)",
     "🧪 Live Telemetry (실시간 평가)",
+    "⚡ Interactive Training (브라우저 실시간 학습)",
     "📈 TensorBoard & System Info"
 ])
 
@@ -450,9 +451,220 @@ with tab3:
                 st.line_chart(df_steps)
 
 # ----------------------------------------------------
-# Tab 4: TensorBoard & System Info
+# Tab 4: Interactive Browser Training Lab
 # ----------------------------------------------------
 with tab4:
+    st.markdown("### ⚡ Interactive Browser Training Lab (브라우저 실시간 강화학습)")
+    st.markdown("""
+    설치나 복잡한 명령어 없이, **웹 브라우저에서 직접 PPO 하이퍼파라미터를 조절하고 실시간으로 에이전트를 학습**시킵니다!  
+    학습이 진행됨에 따라 에피소드 보상이 상승하는 과정을 실시간 차트로 관찰해 보세요.
+    """)
+
+    col_ctrl, col_mon = st.columns([1, 1.6])
+
+    with col_ctrl:
+        st.markdown("#### ⚙️ 훈련 하이퍼파라미터 설정")
+        train_env_choice = st.selectbox(
+            "학습 대상 로봇/환경:",
+            [
+                "CartPole-v1 (초고속 1~3초 완성 · 교육 추천 🎯)",
+                "MicroDuck-v1 (시그니처 2족 보행 오리 🦆)",
+                "Hopper-v5 (MuJoCo 1족 호핑 🦿)",
+                "Walker2d-v5 (MuJoCo 2족 보행 🏃)"
+            ],
+            index=0
+        )
+
+        env_id_map = {
+            "CartPole-v1 (초고속 1~3초 완성 · 교육 추천 🎯)": "CartPole-v1",
+            "MicroDuck-v1 (시그니처 2족 보행 오리 🦆)": "MicroDuck-v1",
+            "Hopper-v5 (MuJoCo 1족 호핑 🦿)": "Hopper-v5",
+            "Walker2d-v5 (MuJoCo 2족 보행 🏃)": "Walker2d-v5"
+        }
+        selected_train_env = env_id_map[train_env_choice]
+
+        # 기본 스텝 수 추천
+        default_steps = 3000 if selected_train_env == "CartPole-v1" else 2048
+        max_steps = 10000 if selected_train_env == "CartPole-v1" else 6144
+        step_increment = 1000 if selected_train_env == "CartPole-v1" else 2048
+
+        train_timesteps = st.slider(
+            "학습 타임스텝 수 (Total Timesteps):",
+            min_value=1000 if selected_train_env == "CartPole-v1" else 2048,
+            max_value=max_steps,
+            value=default_steps,
+            step=step_increment,
+            help="클라우드 환경의 자원을 고려하여 브라우저에서 1~15초 내에 완료되는 범위로 최적화되었습니다."
+        )
+
+        lr_select = st.select_slider(
+            "학습률 (Learning Rate):",
+            options=[1e-4, 3e-4, 5e-4, 1e-3, 3e-3],
+            value=3e-4,
+            format_func=lambda x: f"{x:.0e}"
+        )
+
+        n_epochs = st.slider("PPO 에포크 수 (n_epochs):", min_value=3, max_value=10, value=5)
+
+        start_train = st.button("🚀 브라우저에서 즉시 학습 시작", type="primary", use_container_width=True)
+
+    with col_mon:
+        st.markdown("#### 📡 실시간 훈련 모니터링")
+        status_box = st.empty()
+        prog_bar = st.progress(0)
+        chart_box = st.empty()
+
+        if not start_train:
+            status_box.info("👈 좌측에서 하이퍼파라미터를 설정한 후 **[브라우저에서 즉시 학습 시작]** 버튼을 누르세요.")
+            chart_box.markdown(
+                """
+                <div style="border: 2px dashed rgba(255,255,255,0.15); border-radius: 10px; padding: 40px; text-align: center; color: #8E9AAF;">
+                    📈 학습이 시작되면 실시간 에피소드 보상 곡선이 이곳에 그려집니다.
+                </div>
+                """, unsafe_allow_html=True
+            )
+        else:
+            try:
+                import io
+                import mujoco_compat
+                import microduck_env
+                import gymnasium as gym
+                from stable_baselines3 import PPO
+                from stable_baselines3.common.monitor import Monitor
+                from stable_baselines3.common.callbacks import BaseCallback
+
+                status_box.info(f"⏳ `{selected_train_env}` 물리 시뮬레이션 환경 초기화 중...")
+
+                # 1. 훈련 전 Random Baseline 빠른 평가
+                raw_test_env = gym.make(selected_train_env)
+                pre_rewards = []
+                for _ in range(3):
+                    o, _ = raw_test_env.reset()
+                    d = False
+                    ep_r = 0
+                    while not d:
+                        a = raw_test_env.action_space.sample()
+                        o, r, term, trunc, _ = raw_test_env.step(a)
+                        ep_r += float(r)
+                        d = term or trunc
+                    pre_rewards.append(ep_r)
+                raw_test_env.close()
+                pre_mean = float(np.mean(pre_rewards))
+
+                # 2. Callback 정의
+                class StreamlitCallback(BaseCallback):
+                    def __init__(self, total_steps, p_bar, s_box, c_box):
+                        super().__init__()
+                        self.total_steps = total_steps
+                        self.p_bar = p_bar
+                        self.s_box = s_box
+                        self.c_box = c_box
+                        self.records = []
+                        self.last_ep_len = 0
+                        self.start_t = time.time()
+
+                    def _on_step(self) -> bool:
+                        buf = self.model.ep_info_buffer
+                        if buf and len(buf) > self.last_ep_len:
+                            self.last_ep_len = len(buf)
+                            recent_r = [x["r"] for x in buf]
+                            mean_rew = float(np.mean(recent_r[-5:]))
+                            self.records.append({
+                                "Timestep": self.num_timesteps,
+                                "Mean Reward": mean_rew
+                            })
+                            df_hist = pd.DataFrame(self.records).set_index("Timestep")
+                            self.c_box.line_chart(df_hist, color="#2EC4B6")
+
+                        frac = min(1.0, float(self.num_timesteps) / float(self.total_steps))
+                        self.p_bar.progress(frac)
+                        elapsed = time.time() - self.start_t
+                        fps = int(self.num_timesteps / max(0.1, elapsed))
+                        self.s_box.markdown(
+                            f"**🏃 학습 중:** `{self.num_timesteps:,} / {self.total_steps:,} steps` "
+                            f"({int(frac*100)}%) | 완료 에피소드: `{self.last_ep_len}`개 | 속도: `{fps}` FPS"
+                        )
+                        return True
+
+                # 3. 환경 생성
+                train_env = Monitor(gym.make(selected_train_env))
+
+                n_steps = 128 if selected_train_env == "CartPole-v1" else 512
+                batch_size = 64
+
+                model = PPO(
+                    "MlpPolicy",
+                    train_env,
+                    learning_rate=lr_select,
+                    n_steps=n_steps,
+                    batch_size=batch_size,
+                    n_epochs=n_epochs,
+                    gamma=0.99,
+                    verbose=0
+                )
+
+                cb = StreamlitCallback(train_timesteps, prog_bar, status_box, chart_box)
+                start_time = time.time()
+                model.learn(total_timesteps=train_timesteps, callback=cb)
+                train_time = time.time() - start_time
+                train_env.close()
+
+                # 4. 훈련 후 즉시 평가
+                eval_env = gym.make(selected_train_env)
+                post_rewards = []
+                for _ in range(3):
+                    o, _ = eval_env.reset()
+                    d = False
+                    ep_r = 0
+                    st_cnt = 0
+                    while not d and st_cnt < 1000:
+                        a, _ = model.predict(o, deterministic=True)
+                        o, r, term, trunc, _ = eval_env.step(a)
+                        ep_r += float(r)
+                        st_cnt += 1
+                        d = term or trunc
+                    post_rewards.append(ep_r)
+                eval_env.close()
+                post_mean = float(np.mean(post_rewards))
+
+                prog_bar.progress(1.0)
+                status_box.success(f"🎉 브라우저 PPO 학습 완료! (총 소요 시간: {train_time:.1f}초)")
+
+                # 5. 결과 비교 표시
+                st.markdown("#### 🏆 학습 전후 성과 비교 (Before vs After)")
+                m1, m2, m3 = st.columns(3)
+                m1.metric("훈련 전 (랜덤 정책)", f"{pre_mean:.1f} pts")
+                delta_pts = post_mean - pre_mean
+                m2.metric("훈련 후 (브라우저 PPO)", f"{post_mean:.1f} pts", delta=f"{delta_pts:+.1f} pts")
+                pct_boost = ((post_mean - pre_mean) / max(1.0, abs(pre_mean))) * 100.0
+                m3.metric("성과 향상률", f"{pct_boost:+.1f}%")
+
+                # 6. 모델 다운로드 버튼 제공
+                temp_zip_path = os.path.join(os.getcwd(), f"temp_browser_{selected_train_env}.zip")
+                model.save(temp_zip_path)
+                with open(temp_zip_path, "rb") as f:
+                    zip_data = f.read()
+                try:
+                    os.remove(temp_zip_path)
+                except Exception:
+                    pass
+
+                st.download_button(
+                    label=f"💾 방금 브라우저에서 학습한 {selected_train_env} 모델 다운로드 (.zip)",
+                    data=zip_data,
+                    file_name=f"{selected_train_env}_browser_ppo.zip",
+                    mime="application/zip",
+                    use_container_width=True
+                )
+
+            except Exception as e:
+                status_box.error(f"학습 중 오류 발생: {e}")
+                st.exception(e)
+
+# ----------------------------------------------------
+# Tab 5: TensorBoard & System Info
+# ----------------------------------------------------
+with tab5:
     st.markdown("### 📈 TensorBoard & System Management")
 
     col_tb1, col_tb2 = st.columns([1, 1])
@@ -474,6 +686,7 @@ Working Directory : {os.getcwd()}
 Active Robots     : {len(ROBOT_CONFIGS)} environments
 OS Platform       : Cloud / Linux Deployment Ready
 Web Server        : Streamlit 1.64 + MuJoCo 3.13
+Interactive RL    : Enabled (In-Browser PPO Training)
         """, language="text")
 
 st.markdown("---")
