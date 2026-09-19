@@ -1,0 +1,23 @@
+# Virtual environment
+.venv/
+venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Large TensorBoard event logs (do not push to git)
+logs/**/events.out.tfevents*
+
+# Keep trained models, normalizers, and videos for web deployment
+!models/*.zip
+!models/*.pkl
+!videos/*.gif
+!logs/learning_curves.png
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,105 @@
+<mujoco model="microduck">
+  <compiler angle="degree" coordinate="local" inertiafromgeom="true"/>
+  <default>
+    <joint armature="0.01" damping="0.2" limited="true"/>
+    <geom conaffinity="1" condim="3" friction="1.2 0.1 0.1" margin="0.001" rgba="1.0 0.85 0.1 1"/>
+    <motor ctrllimited="true" ctrlrange="-1.0 1.0"/>
+  </default>
+
+  <option integrator="RK4" timestep="0.005" gravity="0 0 -9.81"/>
+
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1"/>
+    <map znear="0.02"/>
+  </visual>
+
+  <asset>
+    <texture builtin="gradient" height="100" rgb1="1 1 1" rgb2="0.6 0.8 1" type="skybox" width="100"/>
+    <texture builtin="checker" height="100" name="texplane" rgb1="0.2 0.3 0.4" rgb2="0.1 0.15 0.2" type="2d" width="100"/>
+    <material name="matplane" reflectance="0.2" shininess="1" specular="1" texrepeat="60 60" texture="texplane"/>
+    <material name="duck_yellow" rgba="1.0 0.85 0.05 1"/>
+    <material name="duck_orange" rgba="1.0 0.42 0.0 1"/>
+    <material name="duck_eye" rgba="0.1 0.1 0.1 1"/>
+    <material name="duck_wing" rgba="0.95 0.78 0.05 1"/>
+  </asset>
+
+  <worldbody>
+    <light cutoff="100" diffuse="1 1 1" dir="-0 0 -1.3" directional="true" exponent="1" pos="0 0 2.5" specular=".1 .1 .1"/>
+    <geom conaffinity="1" condim="3" material="matplane" name="floor" pos="0 0 0" rgba="0.8 0.9 0.8 1" size="40 40 0.1" type="plane"/>
+
+    <!-- MicroDuck Main Torso -->
+    <body name="torso" pos="0 0 0.55">
+      <freejoint name="root"/>
+      <!-- Main Body: Chubby Duck Torso -->
+      <geom material="duck_yellow" name="torso_geom" pos="0 0 0" size="0.16 0.13 0.12" type="ellipsoid"/>
+      
+      <!-- Tail Feathers -->
+      <geom material="duck_yellow" name="tail_geom" pos="-0.16 0 0.04" size="0.06 0.05 0.03" type="ellipsoid"/>
+
+      <!-- Duck Head -->
+      <body name="head" pos="0.12 0 0.14">
+        <geom material="duck_yellow" name="head_geom" pos="0 0 0" size="0.1" type="sphere"/>
+        <!-- Eyes -->
+        <geom material="duck_eye" name="left_eye" pos="0.06 0.06 0.03" size="0.016" type="sphere"/>
+        <geom material="duck_eye" name="right_eye" pos="0.06 -0.06 0.03" size="0.016" type="sphere"/>
+        <!-- Cute Duck Beak (Orange Bill) -->
+        <geom material="duck_orange" name="beak_geom" pos="0.1 0 -0.02" size="0.055 0.05 0.016" type="box"/>
+      </body>
+
+      <!-- Left Wing -->
+      <body name="left_wing" pos="0 0.14 0.02">
+        <geom material="duck_wing" name="left_wing_geom" pos="0 0.02 0" size="0.1 0.02 0.06" type="ellipsoid"/>
+      </body>
+
+      <!-- Right Wing -->
+      <body name="right_wing" pos="0 -0.14 0.02">
+        <geom material="duck_wing" name="right_wing_geom" pos="0 -0.02 0" size="0.1 0.02 0.06" type="ellipsoid"/>
+      </body>
+
+      <!-- ================= LEFT LEG ================= -->
+      <body name="left_thigh" pos="0 0.08 -0.08">
+        <joint axis="0 1 0" name="left_hip" range="-50 50" type="hinge"/>
+        <geom material="duck_orange" name="left_thigh_geom" fromto="0 0 0 0 0 -0.14" size="0.03" type="capsule"/>
+
+        <body name="left_shin" pos="0 0 -0.14">
+          <joint axis="0 1 0" name="left_knee" range="-20 80" type="hinge"/>
+          <geom material="duck_orange" name="left_shin_geom" fromto="0 0 0 0 0 -0.14" size="0.025" type="capsule"/>
+
+          <body name="left_foot" pos="0 0 -0.14">
+            <joint axis="0 1 0" name="left_ankle" range="-40 40" type="hinge"/>
+            <!-- Flat Webbed Foot for stable duck walking -->
+            <geom material="duck_orange" name="left_foot_geom" pos="0.04 0 -0.02" size="0.09 0.06 0.018" type="box"/>
+          </body>
+        </body>
+      </body>
+
+      <!-- ================= RIGHT LEG ================= -->
+      <body name="right_thigh" pos="0 -0.08 -0.08">
+        <joint axis="0 1 0" name="right_hip" range="-50 50" type="hinge"/>
+        <geom material="duck_orange" name="right_thigh_geom" fromto="0 0 0 0 0 -0.14" size="0.03" type="capsule"/>
+
+        <body name="right_shin" pos="0 0 -0.14">
+          <joint axis="0 1 0" name="right_knee" range="-20 80" type="hinge"/>
+          <geom material="duck_orange" name="right_shin_geom" fromto="0 0 0 0 0 -0.14" size="0.025" type="capsule"/>
+
+          <body name="right_foot" pos="0 0 -0.14">
+            <joint axis="0 1 0" name="right_ankle" range="-40 40" type="hinge"/>
+            <!-- Flat Webbed Foot for stable duck walking -->
+            <geom material="duck_orange" name="right_foot_geom" pos="0.04 0 -0.02" size="0.09 0.06 0.018" type="box"/>
+          </body>
+        </body>
+      </body>
+
+    </body>
+  </worldbody>
+
+  <!-- Actuators (6 Joint Motors: 3 on each leg) -->
+  <actuator>
+    <motor gear="80" joint="left_hip" name="left_hip_motor"/>
+    <motor gear="80" joint="left_knee" name="left_knee_motor"/>
+    <motor gear="50" joint="left_ankle" name="left_ankle_motor"/>
+    <motor gear="80" joint="right_hip" name="right_hip_motor"/>
+    <motor gear="80" joint="right_knee" name="right_knee_motor"/>
+    <motor gear="50" joint="right_ankle" name="right_ankle_motor"/>
+  </actuator>
+</mujoco>
